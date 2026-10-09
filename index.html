@@ -794,22 +794,41 @@ var SETTINGS = {
     };
     if (/^\S+@\S+\.\S+$/.test(contact)) payload._replyto = contact;
 
+    var mailtoSubj = encodeURIComponent('Appointment Booking Request: ' + t.name);
+    var mailtoBody = encodeURIComponent(
+      'APPOINTMENT BOOKING REQUEST\n\n' +
+      'Service: ' + t.name + '\n' +
+      'Date & Time: ' + whenText() + '\n' +
+      'Total: ' + $('sum-total').textContent + '\n\n' +
+      'CLIENT DETAILS:\n' +
+      'Name: ' + name + '\n' +
+      'Contact: ' + contact + '\n' +
+      'Safest way to reach: ' + $('bk-safe').value + '\n' +
+      'Note: ' + ($('bk-note').value.trim() || 'None')
+    );
+    var mailtoLink = 'mailto:' + encodeURIComponent(SETTINGS.bookingEmail) + '?subject=' + mailtoSubj + '&body=' + mailtoBody;
+
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 8000) : null;
+
     fetch('https://formsubmit.co/ajax/' + encodeURIComponent(SETTINGS.bookingEmail), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) {
-        if (!res.ok || String(res.j.success) === 'false') throw new Error(res.j.message || 'failed');
-        // Success: hide the form, show a big success card, auto-close after 5 seconds.
-        btn.disabled = false; btn.textContent = label;
-        showSuccess(t.name, whenText(), $('sum-total').textContent);
-      })
-      .catch(function () {
-        btn.disabled = false; btn.textContent = label;
-        err.textContent = 'Sorry, the request could not be sent. Please check your internet connection and try again, or email covsynrg@gmail.com directly.';
-        err.hidden = false;
-      });
+      body: JSON.stringify(payload),
+      signal: controller ? controller.signal : undefined
+    }).then(function (r) { 
+      if (timeoutId) clearTimeout(timeoutId);
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); 
+    }).then(function (res) {
+      if (!res.ok || String(res.j.success) === 'false') throw new Error(res.j.message || 'failed');
+      btn.disabled = false; btn.textContent = label;
+      showSuccess(t.name, whenText(), $('sum-total').textContent);
+    }).catch(function () {
+      if (timeoutId) clearTimeout(timeoutId);
+      btn.disabled = false; btn.textContent = label;
+      err.innerHTML = 'Unable to send automatically right now.<br><a href="' + mailtoLink + '" style="display:inline-block;margin-top:6px;color:#D9A83F;text-decoration:underline;font-weight:700;">✉ Click here to send request directly via Email</a>';
+      err.hidden = false;
+    });
   });
 
 
